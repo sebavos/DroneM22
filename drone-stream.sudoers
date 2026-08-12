@@ -1,0 +1,6 @@
+# Permite al lanzador de escritorio levantar el streaming del dron y reconectar
+# el Wi-Fi sin pedir contrasena. Alcance limitado a estos comandos exactos.
+uavlab1 ALL=(root) NOPASSWD: /bin/systemctl start drone-stream
+uavlab1 ALL=(root) NOPASSWD: /bin/systemctl restart drone-stream
+uavlab1 ALL=(root) NOPASSWD: /bin/systemctl stop drone-stream
+uavlab1 ALL=(root) NOPASSWD: /usr/local/bin/drone-wifi-watchdog.sh

@@ -1,0 +1,11 @@
+/home/uavlab1/drone_stream.log {
+    daily
+    rotate 5
+    size 5M
+    missingok
+    notifempty
+    copytruncate
+    compress
+    delaycompress
+    su uavlab1 uavlab1
+}

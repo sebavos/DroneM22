@@ -1,0 +1,9 @@
+# Credenciales: nunca al repositorio
+ACCESO-PRIVADO.txt
+
+# Salidas de trabajo
+*.png
+*.jpg
+*.gif
+capture/
+__pycache__/

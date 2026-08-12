@@ -1,0 +1,10 @@
+[Unit]
+Description=Chequeo periodico del enlace Wi-Fi con el dron M22
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=30
+AccuracySec=5
+
+[Install]
+WantedBy=timers.target

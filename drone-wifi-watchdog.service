@@ -1,0 +1,7 @@
+[Unit]
+Description=Devuelve wlan0 al AP del dron M22 cuando vuelve a estar disponible
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/drone-wifi-watchdog.sh

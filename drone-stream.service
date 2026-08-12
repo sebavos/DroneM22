@@ -1,0 +1,18 @@
+[Unit]
+Description=Streaming de video del dron M22 (LYHFPV) - Jetson Nano
+Documentation=https://github.com/Javiermoralesubo/Camara-drone-hd
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=uavlab1
+Group=uavlab1
+WorkingDirectory=/home/uavlab1
+ExecStart=/bin/bash -c 'exec /usr/bin/python3 -u /home/uavlab1/drone_stream.py >> /home/uavlab1/drone_stream.log 2>&1'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

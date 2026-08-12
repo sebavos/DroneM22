@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Cámara Dron M22
+Name[es]=Cámara Dron M22
+Comment=Abre el video en vivo del dron M22 (LYHFPV)
+Comment[es]=Abre el video en vivo del dron M22 (LYHFPV)
+Exec=/home/uavlab1/abrir_camara.sh
+Icon=camera-video
+Terminal=false
+StartupNotify=true
+Categories=AudioVideo;Video;

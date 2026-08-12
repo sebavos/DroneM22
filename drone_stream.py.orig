@@ -1,0 +1,182 @@
+"""
+Interfaz de Recepción y Streaming de Video para Dron M22 (LYHFPV)
+=================================================================
+Servidor de Video en Vivo desarrollado para NVIDIA Jetson Nano.
+"""
+
+import socket
+import cv2
+import time
+import threading
+import numpy as np
+from flask import Flask, Response
+
+DRONE_IP = "192.168.169.1"
+DRONE_PORT = 8800
+LOCAL_PORT = 8804
+
+CMD_START = bytes.fromhex("EF 00 01 00")
+CMD_HEARTBEAT = bytes.fromhex("EF 00 04 00")
+
+app = Flask(__name__)
+latest_frame = None
+frame_lock = threading.Lock()
+packet_counter = 0
+frame_counter = 0
+
+def create_status_frame(text_status="Conectando al Dron M22..."):
+    """ Genera un marco gráfico HUD con información de telemetría """
+    img = np.zeros((720, 1280, 3), dtype=np.uint8)
+    img[:] = (20, 20, 20)
+    
+    cv2.putText(img, "NVIDIA JETSON - INTERFAZ DRON M22 (LYHFPV)", (50, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 0), 2)
+    cv2.putText(img, f"Estado: {text_status}", (50, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+    
+    cv2.putText(img, f"IP Dron: {DRONE_IP}:{DRONE_PORT}", (50, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 2)
+    cv2.putText(img, f"Paquetes UDP recibidos: {packet_counter}", (50, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    cv2.putText(img, f"Cuadros de video procesados: {frame_counter}", (50, 320), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+    
+    current_time = time.strftime("%H:%M:%S")
+    cv2.putText(img, f"Hora Jetson: {current_time}", (50, 400), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 255), 2)
+    
+    cv2.rectangle(img, (30, 30), (1250, 690), (0, 255, 0), 2)
+    return img
+
+def heartbeat_loop(sock):
+    """ Envía continuamente comandos de inicio y latido al dron """
+    print(f"[+] Hilo de latido iniciado hacia {DRONE_IP}:{DRONE_PORT}...")
+    loop_idx = 0
+    while True:
+        try:
+            # Enviar comando de inicio
+            sock.sendto(CMD_START, (DRONE_IP, DRONE_PORT))
+            time.sleep(0.05)
+            # Enviar comando de latido
+            sock.sendto(CMD_HEARTBEAT, (DRONE_IP, DRONE_PORT))
+            
+            loop_idx += 1
+            time.sleep(1.0)
+        except Exception as e:
+            print(f"[-] Error enviando latido: {e}")
+            time.sleep(1.0)
+
+def receiver_loop(sock):
+    """ Recibe los paquetes UDP del dron, agrupa fragmentos y decodifica el stream """
+    global latest_frame, packet_counter, frame_counter
+    
+    current_chunks = {}
+    sock.settimeout(0.5)
+    
+    with frame_lock:
+        latest_frame = create_status_frame("Iniciando receptor UDP...")
+    
+    print("[+] Receptor UDP escuchando paquetes...")
+    
+    while True:
+        try:
+            data, addr = sock.recvfrom(65535)
+            packet_counter += 1
+            
+            if len(data) >= 56:
+                chunk_idx = data[32]
+                
+                if chunk_idx == 0:
+                    if len(current_chunks) > 0:
+                        frame_counter += 1
+                        assembled = bytearray()
+                        for idx in sorted(current_chunks.keys()):
+                            assembled.extend(current_chunks[idx])
+                        
+                        # Invertir bits de carga útil (XOR 0xFF)
+                        dec = bytes([b ^ 0xFF for b in assembled])
+                        soi = dec.find(b'\xff\xd8')
+                        eoi = dec.rfind(b'\xff\xd9')
+                        
+                        decoded_img = None
+                        if soi != -1 and eoi != -1 and eoi > soi:
+                            jpg_data = dec[soi:eoi+2]
+                            decoded_img = cv2.imdecode(np.frombuffer(jpg_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        
+                        with frame_lock:
+                            if decoded_img is not None:
+                                latest_frame = decoded_img.copy()
+                            else:
+                                latest_frame = create_status_frame(f"Recepción UDP activa ({packet_counter} paquetes)")
+                    
+                    current_chunks = {}
+                
+                current_chunks[chunk_idx] = data[56:]
+                
+        except socket.timeout:
+            with frame_lock:
+                latest_frame = create_status_frame("Esperando respuesta del dron...")
+        except Exception as e:
+            time.sleep(0.01)
+
+def generate_mjpeg():
+    """ Generador HTTP MJPEG para la vista web """
+    global latest_frame
+    while True:
+        with frame_lock:
+            if latest_frame is None:
+                frame_to_send = create_status_frame("Iniciando transmisión...")
+            else:
+                frame_to_send = latest_frame.copy()
+                
+        ret, jpeg = cv2.imencode('.jpg', frame_to_send)
+        if ret:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+        time.sleep(0.04)
+
+@app.route('/')
+def index():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>NVIDIA Jetson - Interfaz Dron M22</title>
+        <style>
+            body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; }
+            h1 { color: #76b900; }
+            .container { max-width: 1280px; margin: 0 auto; background: #1e1e1e; padding: 15px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+            img { width: 100%; height: auto; border-radius: 5px; border: 2px solid #76b900; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>NVIDIA Jetson - Interfaz Dron M22 (LYHFPV)</h1>
+            <p>Transmisión de Video en Vivo & Telemetría (1280x720)</p>
+            <img src="/video_feed" alt="Transmisión del Dron" />
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def main():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except AttributeError:
+        pass
+    sock.bind(('0.0.0.0', LOCAL_PORT))
+    
+    # Iniciar hilos
+    threading.Thread(target=heartbeat_loop, args=(sock,), daemon=True).start()
+    threading.Thread(target=receiver_loop, args=(sock,), daemon=True).start()
+    
+    print("\n" + "="*65)
+    print(" ¡Servidor de Video en Vivo de la Jetson Iniciado!")
+    print(" Accede desde tu navegador web a:")
+    print(" http://192.168.14.7:5000")
+    print("="*65 + "\n")
+    
+    app.run(host='0.0.0.0', port=5000, threaded=True)
+
+if __name__ == "__main__":
+    main()
