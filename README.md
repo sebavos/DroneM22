@@ -5,6 +5,7 @@ Jetson Nano. **El video funciona.** Este documento explica cómo operarlo, cómo
 resuelto el formato, y qué queda por hacer.
 
 Repo original: https://github.com/Javiermoralesubo/Camara-drone-hd
+Repo actual: https://github.com/sebavos/DroneM22
 
 > **Antes de publicar esto en cualquier lado:** las credenciales viven en
 > `ACCESO-PRIVADO.txt`, excluido por `.gitignore`. Verificá que siga excluido
@@ -187,10 +188,11 @@ estructura de la imagen es exacta, pero contraste y saturación son aproximados.
 La tabla verdadera está en la app del dron — sacarla del APK, o hacer que la app
 guarde una foto y leerle la cabecera. Bien acotado y verificable.
 
-**2. Explorar el espacio de comandos.**
+**2. Explorar el espacio de comandos (EN PROGRESO).**
 Solo se conocen `EF 00 01 00` y `EF 00 04 00`. Todo el rango `EF 00 xx 00` está sin
 explorar: ahí pueden estar resolución, framerate, foto, grabación, gimbal. Es la
 línea con más potencial de descubrimiento.
+*Actualización:* Actualmente estamos usando **Frida** (mediante el script `drone_debug.js`) para interceptar la aplicación oficial de Android y descubrir qué comandos UDP envía realmente para mejorar los FPS y controlar la cámara.
 
 **3. Framerate — parcialmente resuelto, queda margen.**
 El dron **emite una ráfaga de cuadros por cada keepalive que recibe**. Con el
